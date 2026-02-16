@@ -424,6 +424,349 @@ footer {
   color: #9d2323;
 }
 
+.admin-shell {
+  min-height: 100vh;
+  background: var(--marfil);
+  padding: 7.5rem 5% 3rem;
+}
+
+.admin-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-section-header h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 2.3vw, 2.3rem);
+}
+
+.admin-section-header p {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+}
+
+.admin-message {
+  margin: 0;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+}
+
+.admin-message.success {
+  border: 1px solid #b8cfae;
+  background: #eef6e9;
+}
+
+.admin-message.error {
+  border: 1px solid #d59a9a;
+  background: #f9ecec;
+}
+
+.admin-split {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 1rem;
+}
+
+.admin-card {
+  border: 1px solid var(--arena);
+  border-radius: 18px;
+  background: var(--blanco);
+  padding: 1rem;
+}
+
+.admin-card h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.2rem;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  border-bottom: 1px solid var(--arena);
+  padding: 0.65rem 0.25rem;
+}
+
+.admin-delete-btn,
+.admin-submit-btn {
+  border: none;
+  border-radius: 10px;
+  background: var(--negro);
+  color: var(--blanco);
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-delete-btn {
+  padding: 0.4rem 0.75rem;
+}
+
+.admin-submit-btn {
+  margin-top: 0.2rem;
+  padding: 0.75rem 1rem;
+}
+
+.admin-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.admin-form {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.admin-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  font: inherit;
+  background: var(--blanco);
+  color: var(--negro);
+}
+
+.dashboard-shell {
+  min-height: 100vh;
+  background: var(--marfil);
+  display: grid;
+  grid-template-columns: 280px 1fr;
+}
+
+.dashboard-sidebar {
+  border-right: 1px solid var(--arena);
+  background: var(--blanco);
+  padding: 7.2rem 1rem 1.2rem;
+  display: grid;
+  align-content: start;
+  gap: 0.7rem;
+}
+
+.dashboard-logo {
+  height: 56px;
+  width: auto;
+  mix-blend-mode: multiply;
+}
+
+.dashboard-sidebar h1 {
+  margin: 0.2rem 0 0.8rem;
+  font-size: 1.2rem;
+}
+
+.dashboard-nav-btn {
+  border: 1px solid var(--arena);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--negro);
+  text-align: left;
+  padding: 0.7rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dashboard-nav-btn.active {
+  background: var(--negro);
+  color: var(--blanco);
+  border-color: var(--negro);
+}
+
+.dashboard-content {
+  padding: 7.2rem 1.2rem 1.4rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.admin-main-card {
+  border: 1px solid var(--arena);
+  background: var(--blanco);
+  border-radius: 18px;
+  padding: 1rem;
+}
+
+.admin-main-card h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1.25rem;
+}
+
+.admin-main-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr 1.2fr;
+}
+
+.admin-row {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+}
+
+.admin-row label {
+  font-weight: 500;
+}
+
+.admin-landing-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.admin-landing-item {
+  border: 1px solid var(--arena);
+  border-radius: 10px;
+  padding: 0.6rem;
+  display: grid;
+  grid-template-columns: 1fr 90px;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.admin-landing-item p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.admin-landing-item img {
+  width: 90px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.client-shell {
+  min-height: 100vh;
+  background: var(--marfil);
+  color: var(--negro);
+  padding: 7.5rem 5% 3rem;
+}
+
+.client-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  gap: 1.2rem;
+}
+
+.client-welcome {
+  border: 1px solid var(--arena);
+  border-radius: 18px;
+  background: var(--blanco);
+  padding: 1.2rem;
+}
+
+.client-logo {
+  height: 54px;
+  width: auto;
+  mix-blend-mode: multiply;
+  margin-bottom: 0.6rem;
+}
+
+.client-welcome h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.2vw, 2.2rem);
+}
+
+.client-status {
+  display: inline-block;
+  margin-top: 0.8rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--arena);
+  border-radius: 999px;
+  background: var(--marfil);
+}
+
+.client-card-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.client-card {
+  border: 1px solid var(--arena);
+  border-radius: 14px;
+  background: var(--blanco);
+  min-height: 112px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 0.8rem;
+}
+
+.client-card a,
+.client-card-disabled {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.client-card-disabled {
+  color: var(--muted);
+}
+
+.client-gallery {
+  border: 1px solid var(--arena);
+  border-radius: 18px;
+  background: var(--blanco);
+  padding: 1.2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.client-gallery h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.client-featured {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.client-featured img {
+  width: 100%;
+  height: 420px;
+  object-fit: cover;
+  border-radius: 14px;
+}
+
+.client-featured p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.client-thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.6rem;
+}
+
+.client-thumb {
+  border: 1px solid var(--arena);
+  border-radius: 10px;
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.client-thumb.active {
+  border-color: var(--negro);
+}
+
+.client-thumb img {
+  width: 100%;
+  height: 86px;
+  object-fit: cover;
+}
+
 @media (max-width: 768px) {
   .nav-overlay {
     width: 90vw;
@@ -455,5 +798,47 @@ footer {
   .login-card {
     padding: 1.5rem;
     border-radius: 18px;
+  }
+
+  .admin-shell {
+    padding-top: 7rem;
+  }
+
+  .admin-split {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--arena);
+    padding-top: 7rem;
+  }
+
+  .dashboard-content {
+    padding-top: 1rem;
+  }
+
+  .admin-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .client-shell {
+    padding-top: 7rem;
+  }
+
+  .client-card-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .client-featured {
+    grid-template-columns: 1fr;
+  }
+
+  .client-featured img {
+    height: 280px;
   }
 }

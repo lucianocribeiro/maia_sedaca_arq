@@ -1,7 +1,18 @@
 import { ContactForm } from '@/components/ContactForm';
 import { ImageCarousel } from '@/components/ImageCarousel';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
-const proyectos = [
+type LandingSectionRow = {
+  section_key?: string | null;
+  sort_order?: number | null;
+  title?: string | null;
+  image_url?: string | null;
+};
+
+const defaultHero =
+  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1600&q=80';
+
+const defaultProjects = [
   {
     name: 'Casa Nordelta',
     image:
@@ -24,7 +35,7 @@ const proyectos = [
   }
 ];
 
-const detalles = [
+const defaultDetails = [
   'https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=600&q=80',
   'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=600&q=80',
   'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=600&q=80',
@@ -37,15 +48,44 @@ const servicios = [
   'CONSULTORÍA DE DISEÑO Y CONSTRUCCIÓN'
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await getSupabaseServerClient();
+  const { data: landingData } = await supabase
+    .from('landing_sections')
+    .select('section_key, sort_order, title, image_url')
+    .order('section_key', { ascending: true })
+    .order('sort_order', { ascending: true })
+    .returns<LandingSectionRow[]>();
+
+  const rows = landingData || [];
+
+  const heroFromDb =
+    rows.find((row) => (row.section_key || '').toLowerCase() === 'hero' && row.image_url)?.image_url || null;
+
+  const projectsFromDb = rows
+    .filter((row) => (row.section_key || '').toLowerCase() === 'obras' && row.image_url)
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    .map((row, index) => ({
+      name: row.title?.trim() || `Proyecto ${index + 1}`,
+      image: row.image_url as string
+    }));
+
+  const detailsFromDb = rows
+    .filter((row) => (row.section_key || '').toLowerCase() === 'detalles' && row.image_url)
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    .map((row) => row.image_url as string);
+
+  const heroImage = heroFromDb || defaultHero;
+  const projects = projectsFromDb.length > 0 ? projectsFromDb : defaultProjects;
+  const details = detailsFromDb.length > 0 ? detailsFromDb : defaultDetails;
+
   return (
     <main>
       <section className="hero">
         <div
           className="hero-img"
           style={{
-            backgroundImage:
-              "url('https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1600&q=80')"
+            backgroundImage: `url('${heroImage}')`
           }}
         />
         <div className="hero-text">
@@ -58,7 +98,7 @@ export default function HomePage() {
         <h2 className="section-title">Obras y Proyectos</h2>
         <ImageCarousel
           variant="projects"
-          items={proyectos.map((proyecto) => ({
+          items={projects.map((proyecto) => ({
             src: proyecto.image,
             alt: proyecto.name,
             caption: proyecto.name
@@ -69,8 +109,8 @@ export default function HomePage() {
       <section id="detalles" className="section-shell detalles-section">
         <h2 className="section-title">Detalles</h2>
         <div className="detalles-gallery">
-          {detalles.map((detalle, index) => (
-            <div className="detalle-card" key={detalle}>
+          {details.map((detalle, index) => (
+            <div className="detalle-card" key={`${detalle}-${index}`}>
               <img src={detalle} alt={`Detalle ${index + 1}`} />
             </div>
           ))}

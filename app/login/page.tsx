@@ -7,6 +7,9 @@ import { normalizeRole, resolveRoleFromMetadata, toClientSlug, type UserRole } f
 
 type ClientProfile = {
   client_name?: string | null;
+};
+
+type UserRoleRow = {
   role?: string | null;
 };
 
@@ -42,46 +45,56 @@ export default function LoginPage() {
       return;
     }
 
-    let role: UserRole = resolveRoleFromMetadata(authData.user);
-    let clientName: string | null = null;
+    let role: UserRole = null;
 
-    const { data: profile, error: profileError } = await supabase
-      .from('client_profiles')
-      .select('*')
+    const { data: roleRow, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
       .eq('user_id', authData.user.id)
-      .maybeSingle<ClientProfile>();
+      .maybeSingle<UserRoleRow>();
 
-    if (profileError) {
-      setError(profileError.message);
-      setLoading(false);
-      return;
+    if (!roleError) {
+      role = normalizeRole(roleRow?.role);
     }
 
     if (!role) {
-      role = normalizeRole(profile?.role);
-    }
-
-    if (profile?.client_name && profile.client_name.trim()) {
-      clientName = profile.client_name.trim();
-      if (!role) {
-        role = 'client';
-      }
+      role = resolveRoleFromMetadata(authData.user);
     }
 
     if (role === 'admin') {
-      router.replace('/admin');
+      router.replace('/admin/dashboard');
       router.refresh();
       return;
     }
 
-    if (role === 'client' && clientName) {
+    if (role === 'client') {
+      const { data: profile, error: profileError } = await supabase
+        .from('client_profiles')
+        .select('client_name')
+        .eq('user_id', authData.user.id)
+        .maybeSingle<ClientProfile>();
+
+      if (profileError) {
+        setError(profileError.message);
+        setLoading(false);
+        return;
+      }
+
+      const clientName = profile?.client_name?.trim() || '';
       const slug = toClientSlug(clientName);
+
+      if (!slug) {
+        setError('Tu perfil de cliente no tiene un nombre válido.');
+        setLoading(false);
+        return;
+      }
+
       router.replace(`/clientes/${slug}`);
       router.refresh();
       return;
     }
 
-    setError('Tu usuario no tiene un perfil válido para ingresar.');
+    setError('No se pudo determinar tu rol de acceso.');
     setLoading(false);
     await supabase.auth.signOut();
   };
