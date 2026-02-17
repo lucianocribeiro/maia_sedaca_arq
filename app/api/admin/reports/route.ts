@@ -4,6 +4,12 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import { normalizeRole, resolveRoleFromMetadata } from '@/lib/auth/roles';
 
 type UserRoleRow = { role?: string | null };
+type ReportBatchPayload = {
+  userId?: string;
+  description?: string;
+  imageUrls?: string[];
+};
+
 const PRIMARY_REPORTS_BUCKET = process.env.SUPABASE_REPORTS_BUCKET || process.env.SUPABASE_STORAGE_BUCKET || 'proyectos';
 const FALLBACK_REPORTS_BUCKET = 'gallery';
 
@@ -45,10 +51,49 @@ async function isAdminRequest() {
   return role === 'admin';
 }
 
+async function insertWeeklyReports(userId: string, description: string, imageUrls: string[]) {
+  const rows = imageUrls.map((photoUrl) => ({
+    user_id: userId,
+    description,
+    photo_url: photoUrl
+  }));
+
+  const supabaseAdmin = getSupabaseAdminClient();
+  const { error } = await supabaseAdmin.from('weekly_reports').insert(rows);
+
+  if (error) {
+    return { ok: false as const, error: error.message };
+  }
+
+  return { ok: true as const, reportsCreated: rows.length };
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (!(await isAdminRequest())) {
       return jsonError('Unauthorized', 401);
+    }
+
+    const contentType = request.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const payload = (await request.json()) as ReportBatchPayload;
+      const userId = String(payload.userId || '').trim();
+      const description = String(payload.description || '').trim();
+      const imageUrls = (payload.imageUrls || []).map((url) => String(url || '').trim()).filter(Boolean);
+
+      if (!userId || !description || imageUrls.length === 0) {
+        return jsonError('Faltan datos para guardar el reporte semanal.', 400);
+      }
+
+      const insertResult = await insertWeeklyReports(userId, description, imageUrls);
+      if (!insertResult.ok) {
+        return jsonError(insertResult.error, 400);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        reportsCreated: insertResult.reportsCreated
+      });
     }
 
     const formData = await request.formData();
@@ -94,21 +139,14 @@ export async function POST(request: NextRequest) {
       uploadedUrls.push(publicUrlData.publicUrl);
     }
 
-    const rows = uploadedUrls.map((photoUrl) => ({
-      user_id: userId,
-      description,
-      photo_url: photoUrl
-    }));
-
-    const { error: reportError } = await supabaseAdmin.from('weekly_reports').insert(rows);
-
-    if (reportError) {
-      return jsonError(reportError.message, 400);
+    const insertResult = await insertWeeklyReports(userId, description, uploadedUrls);
+    if (!insertResult.ok) {
+      return jsonError(insertResult.error, 400);
     }
 
     return NextResponse.json({
       ok: true,
-      reportsCreated: rows.length
+      reportsCreated: insertResult.reportsCreated
     });
   } catch (error) {
     return jsonError(getErrorMessage(error), 500);

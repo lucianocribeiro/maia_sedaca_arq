@@ -24,8 +24,12 @@ type LandingSection = {
 type ApiError = {
   error?: string;
 };
+type ReportBatchPayload = ApiError & {
+  reportsCreated?: number;
+};
 
 const LINK_CATEGORIES = ['DOCUMENTACION', 'PLANOS', 'RENDERS', 'CONTRATOS', 'PAGOS'] as const;
+const REPORTS_BUCKET = 'proyectos';
 type LinkCategory = (typeof LINK_CATEGORIES)[number];
 type LinkMap = Record<LinkCategory, string>;
 
@@ -337,30 +341,45 @@ export function AdminDashboardPanel() {
     setReportUploadCurrent(0);
     setReportUploadTotal(reportFiles.length);
 
-    let uploadedCount = 0;
+    const uploadedUrls: string[] = [];
     for (const file of reportFiles) {
-      const body = new FormData();
-      body.set('userId', selectedClientId);
-      body.set('description', reportDescription);
-      body.set('file', file);
-
-      const response = await fetch('/api/admin/reports', {
-        method: 'POST',
-        body
+      const extension = file.name.toLowerCase().split('.').pop() || 'jpg';
+      const filePath = `weekly-reports/${selectedClientId}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from(REPORTS_BUCKET).upload(filePath, file, {
+        contentType: file.type,
+        upsert: false
       });
 
-      const payload = (await response.json()) as ApiError;
-
-      if (!response.ok) {
-        setGlobalError(payload.error || 'No se pudo cargar el reporte.');
+      if (uploadError) {
+        setGlobalError(uploadError.message || 'No se pudo subir la imagen al storage.');
         setReportUploading(false);
         return;
       }
 
-      uploadedCount += 1;
-      setReportUploadCurrent(uploadedCount);
+      const { data: urlData } = supabase.storage.from(REPORTS_BUCKET).getPublicUrl(filePath);
+      uploadedUrls.push(urlData.publicUrl);
+      setReportUploadCurrent(uploadedUrls.length);
     }
 
+    const response = await fetch('/api/admin/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: selectedClientId,
+        description: reportDescription,
+        imageUrls: uploadedUrls
+      })
+    });
+
+    const payload = (await response.json()) as ReportBatchPayload;
+
+    if (!response.ok) {
+      setGlobalError(payload.error || 'No se pudo guardar el reporte semanal.');
+      setReportUploading(false);
+      return;
+    }
+
+    const uploadedCount = payload.reportsCreated || uploadedUrls.length;
     setGlobalMessage(`Reporte semanal cargado correctamente (${uploadedCount} imagen${uploadedCount === 1 ? '' : 'es'}).`);
     setReportDescription('');
     setReportFiles([]);
