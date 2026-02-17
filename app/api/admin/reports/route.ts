@@ -4,6 +4,8 @@ import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import { normalizeRole, resolveRoleFromMetadata } from '@/lib/auth/roles';
 
 type UserRoleRow = { role?: string | null };
+const PRIMARY_REPORTS_BUCKET = process.env.SUPABASE_REPORTS_BUCKET || process.env.SUPABASE_STORAGE_BUCKET || 'proyectos';
+const FALLBACK_REPORTS_BUCKET = 'gallery';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +15,10 @@ function jsonError(error: string, status = 400) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Internal server error';
+}
+
+function isBucketNotFound(message: string) {
+  return message.toLowerCase().includes('bucket not found');
 }
 
 async function isAdminRequest() {
@@ -68,16 +74,23 @@ export async function POST(request: NextRequest) {
       const extension = file.name.toLowerCase().split('.').pop() || 'jpg';
       const filePath = `weekly-reports/${userId}/${Date.now()}-${index}.${extension}`;
       const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from('proyectos')
+      let usedBucket = PRIMARY_REPORTS_BUCKET;
+      let { error: uploadError } = await supabaseAdmin.storage
+        .from(usedBucket)
         .upload(filePath, fileBuffer, { contentType: file.type, upsert: false });
+
+      if (uploadError && isBucketNotFound(uploadError.message) && usedBucket !== FALLBACK_REPORTS_BUCKET) {
+        usedBucket = FALLBACK_REPORTS_BUCKET;
+        ({ error: uploadError } = await supabaseAdmin.storage
+          .from(usedBucket)
+          .upload(filePath, fileBuffer, { contentType: file.type, upsert: false }));
+      }
 
       if (uploadError) {
         return jsonError(uploadError.message, 400);
       }
 
-      const { data: publicUrlData } = supabaseAdmin.storage.from('proyectos').getPublicUrl(filePath);
+      const { data: publicUrlData } = supabaseAdmin.storage.from(usedBucket).getPublicUrl(filePath);
       uploadedUrls.push(publicUrlData.publicUrl);
     }
 
