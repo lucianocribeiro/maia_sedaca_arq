@@ -37,17 +37,14 @@ const emptyLinks = (): LinkMap => ({
   PAGOS: ''
 });
 
-const LANDING_SLOTS = [
-  { sectionKey: 'hero', sortOrder: 1, label: 'Hero Principal' },
-  { sectionKey: 'obras', sortOrder: 1, label: 'Obras 1' },
-  { sectionKey: 'obras', sortOrder: 2, label: 'Obras 2' },
-  { sectionKey: 'obras', sortOrder: 3, label: 'Obras 3' },
-  { sectionKey: 'obras', sortOrder: 4, label: 'Obras 4' },
-  { sectionKey: 'detalles', sortOrder: 1, label: 'Detalles 1' },
-  { sectionKey: 'detalles', sortOrder: 2, label: 'Detalles 2' },
-  { sectionKey: 'detalles', sortOrder: 3, label: 'Detalles 3' },
-  { sectionKey: 'detalles', sortOrder: 4, label: 'Detalles 4' }
-] as const;
+const LANDING_MIN_ITEMS = 4;
+const LANDING_MAX_ITEMS = 20;
+
+type LandingSlot = {
+  sectionKey: 'hero' | 'obras' | 'detalles';
+  sortOrder: number;
+  label: string;
+};
 
 type DashboardView = 'clients' | 'project' | 'reports' | 'cms';
 
@@ -80,6 +77,8 @@ export function AdminDashboardPanel() {
   const [landingLoading, setLandingLoading] = useState(true);
   const [landingSaving, setLandingSaving] = useState(false);
   const [landingRows, setLandingRows] = useState<LandingSection[]>([]);
+  const [obrasSlots, setObrasSlots] = useState(LANDING_MIN_ITEMS);
+  const [detallesSlots, setDetallesSlots] = useState(LANDING_MIN_ITEMS);
   const [cmsSectionKey, setCmsSectionKey] = useState('hero');
   const [cmsSortOrder, setCmsSortOrder] = useState(1);
   const [cmsTitle, setCmsTitle] = useState('');
@@ -180,6 +179,45 @@ export function AdminDashboardPanel() {
 
     void loadSelectedClientProject(selectedClientId);
   }, [selectedClientId]);
+
+  useEffect(() => {
+    const maxForSection = (sectionKey: 'obras' | 'detalles') =>
+      landingRows.reduce((max, row) => {
+        if ((row.section_key || '').toLowerCase() !== sectionKey) {
+          return max;
+        }
+        const sortOrder = Number(row.sort_order || 0);
+        return Number.isNaN(sortOrder) ? max : Math.max(max, sortOrder);
+      }, 0);
+
+    const nextObras = Math.min(LANDING_MAX_ITEMS, Math.max(LANDING_MIN_ITEMS, maxForSection('obras')));
+    const nextDetalles = Math.min(LANDING_MAX_ITEMS, Math.max(LANDING_MIN_ITEMS, maxForSection('detalles')));
+
+    setObrasSlots((current) => Math.max(current, nextObras));
+    setDetallesSlots((current) => Math.max(current, nextDetalles));
+  }, [landingRows]);
+
+  const landingSlots = useMemo<LandingSlot[]>(() => {
+    const slots: LandingSlot[] = [{ sectionKey: 'hero', sortOrder: 1, label: 'Hero Principal' }];
+
+    for (let index = 1; index <= obrasSlots; index += 1) {
+      slots.push({
+        sectionKey: 'obras',
+        sortOrder: index,
+        label: `Obras ${index}`
+      });
+    }
+
+    for (let index = 1; index <= detallesSlots; index += 1) {
+      slots.push({
+        sectionKey: 'detalles',
+        sortOrder: index,
+        label: `Detalles ${index}`
+      });
+    }
+
+    return slots;
+  }, [obrasSlots, detallesSlots]);
 
   const onCreateClient = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -533,12 +571,30 @@ export function AdminDashboardPanel() {
         <article className="admin-card">
           <h3>Reemplazar imagen</h3>
           <form className="admin-form" onSubmit={onUploadLandingImage}>
+            <div className="admin-row">
+              <button
+                type="button"
+                className="admin-submit-btn"
+                onClick={() => setObrasSlots((current) => Math.min(LANDING_MAX_ITEMS, current + 1))}
+                disabled={obrasSlots >= LANDING_MAX_ITEMS}
+              >
+                Add Obras ({obrasSlots}/{LANDING_MAX_ITEMS})
+              </button>
+              <button
+                type="button"
+                className="admin-submit-btn"
+                onClick={() => setDetallesSlots((current) => Math.min(LANDING_MAX_ITEMS, current + 1))}
+                disabled={detallesSlots >= LANDING_MAX_ITEMS}
+              >
+                Add Detalles ({detallesSlots}/{LANDING_MAX_ITEMS})
+              </button>
+            </div>
             <select className="admin-input" value={`${cmsSectionKey}:${cmsSortOrder}`} onChange={(event) => {
               const [key, order] = event.target.value.split(':');
               setCmsSectionKey(key);
               setCmsSortOrder(Number(order));
             }}>
-              {LANDING_SLOTS.map((slot) => (
+              {landingSlots.map((slot) => (
                 <option key={`${slot.sectionKey}-${slot.sortOrder}`} value={`${slot.sectionKey}:${slot.sortOrder}`}>
                   {slot.label}
                 </option>
