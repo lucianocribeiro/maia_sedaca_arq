@@ -74,6 +74,8 @@ export function AdminDashboardPanel() {
   const [reportDescription, setReportDescription] = useState('');
   const [reportFiles, setReportFiles] = useState<File[]>([]);
   const [reportInputKey, setReportInputKey] = useState(0);
+  const [reportUploadCurrent, setReportUploadCurrent] = useState(0);
+  const [reportUploadTotal, setReportUploadTotal] = useState(0);
 
   const [landingLoading, setLandingLoading] = useState(true);
   const [landingSaving, setLandingSaving] = useState(false);
@@ -332,32 +334,40 @@ export function AdminDashboardPanel() {
 
     clearAlerts();
     setReportUploading(true);
+    setReportUploadCurrent(0);
+    setReportUploadTotal(reportFiles.length);
 
-    const body = new FormData();
-    body.set('userId', selectedClientId);
-    body.set('description', reportDescription);
-    reportFiles.forEach((file) => {
-      body.append('files', file);
-    });
+    let uploadedCount = 0;
+    for (const file of reportFiles) {
+      const body = new FormData();
+      body.set('userId', selectedClientId);
+      body.set('description', reportDescription);
+      body.set('file', file);
 
-    const response = await fetch('/api/admin/reports', {
-      method: 'POST',
-      body
-    });
+      const response = await fetch('/api/admin/reports', {
+        method: 'POST',
+        body
+      });
 
-    const payload = (await response.json()) as ApiError;
+      const payload = (await response.json()) as ApiError;
 
-    if (!response.ok) {
-      setGlobalError(payload.error || 'No se pudo cargar el reporte.');
-      setReportUploading(false);
-      return;
+      if (!response.ok) {
+        setGlobalError(payload.error || 'No se pudo cargar el reporte.');
+        setReportUploading(false);
+        return;
+      }
+
+      uploadedCount += 1;
+      setReportUploadCurrent(uploadedCount);
     }
 
-    setGlobalMessage(`Reporte semanal cargado correctamente (${reportFiles.length} imagen${reportFiles.length === 1 ? '' : 'es'}).`);
+    setGlobalMessage(`Reporte semanal cargado correctamente (${uploadedCount} imagen${uploadedCount === 1 ? '' : 'es'}).`);
     setReportDescription('');
     setReportFiles([]);
     setReportInputKey((current) => current + 1);
     setReportUploading(false);
+    setReportUploadCurrent(0);
+    setReportUploadTotal(0);
   };
 
   const onUploadLandingImage = async (event: FormEvent<HTMLFormElement>) => {
@@ -565,6 +575,11 @@ export function AdminDashboardPanel() {
           <button className="admin-submit-btn" type="submit" disabled={reportUploading}>
             {reportUploading ? 'Subiendo...' : 'Subir Reporte'}
           </button>
+          {reportUploading && reportUploadTotal > 0 ? (
+            <p>
+              Progreso: {reportUploadCurrent}/{reportUploadTotal} imágenes
+            </p>
+          ) : null}
         </form>
       </article>
     </section>
