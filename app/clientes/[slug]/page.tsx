@@ -10,13 +10,14 @@ type ClientPageProps = {
 };
 
 type ClientProfileRow = {
+  id?: string | number | null;
   user_id?: string | null;
   client_name?: string | null;
   project_status?: string | null;
 };
 
 type ClientLinkRow = {
-  category?: string | null;
+  link_type?: string | null;
   url?: string | null;
 };
 
@@ -51,11 +52,11 @@ export default async function ClientSlugPage({ params }: ClientPageProps) {
 
   const { data: profile, error: profileError } = await supabase
     .from('client_profiles')
-    .select('user_id, client_name, project_status')
+    .select('id, user_id, client_name, project_status')
     .eq('user_id', user.id)
     .maybeSingle<ClientProfileRow>();
 
-  if (profileError || !profile?.user_id || !profile.client_name) {
+  if (profileError || !profile?.id || !profile.user_id || !profile.client_name) {
     redirect('/login');
   }
 
@@ -66,13 +67,13 @@ export default async function ClientSlugPage({ params }: ClientPageProps) {
 
   const { data: linkRows } = await supabase
     .from('client_links')
-    .select('category, url')
-    .eq('user_id', user.id)
+    .select('link_type, url')
+    .eq('client_id', profile.id)
     .returns<ClientLinkRow[]>();
 
   const linksByCategory = new Map<string, string>();
   (linkRows || []).forEach((row) => {
-    const category = (row.category || '').trim().toUpperCase();
+    const category = (row.link_type || '').trim().toUpperCase();
     const url = (row.url || '').trim();
     if (category && url) {
       linksByCategory.set(category, url);

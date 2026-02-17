@@ -6,6 +6,9 @@ import { normalizeRole, resolveRoleFromMetadata } from '@/lib/auth/roles';
 type UserRoleRow = {
   role?: string | null;
 };
+type ClientProfileRefRow = {
+  id?: string | number | null;
+};
 
 type CreateClientPayload = {
   email?: string;
@@ -15,9 +18,18 @@ type CreateClientPayload = {
   links?: Record<string, string>;
 };
 
-const LINK_CATEGORIES = ['DOCUMENTACION', 'PLANOS', 'RENDERS', 'CONTRATOS', 'PAGOS', 'FOTOS'] as const;
+const LINK_CATEGORIES = ['DOCUMENTACION', 'PLANOS', 'RENDERS', 'CONTRATOS', 'PAGOS'] as const;
+const DEFAULT_LINK_URL = 'https://drive.google.com/';
 
 export const runtime = 'nodejs';
+
+function jsonError(error: string, status = 400) {
+  return NextResponse.json({ ok: false, error }, { status });
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Internal server error';
+}
 
 async function isAdminRequest() {
   const supabase = await getSupabaseServerClient();
@@ -44,132 +56,187 @@ async function isAdminRequest() {
 }
 
 export async function GET() {
-  if (!(await isAdminRequest())) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    if (!(await isAdminRequest())) {
+      return jsonError('Unauthorized', 401);
+    }
+
+    const supabaseAdmin = getSupabaseAdminClient();
+    const { data, error } = await supabaseAdmin
+      .from('client_profiles')
+      .select('user_id, client_name, project_status')
+      .order('client_name', { ascending: true });
+
+    if (error) {
+      return jsonError(error.message);
+    }
+
+    return NextResponse.json({ ok: true, clients: data || [] });
+  } catch (error) {
+    return jsonError(getErrorMessage(error), 500);
   }
-
-  const supabaseAdmin = getSupabaseAdminClient();
-  const { data, error } = await supabaseAdmin
-    .from('client_profiles')
-    .select('user_id, client_name, project_status')
-    .order('client_name', { ascending: true });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-
-  return NextResponse.json({ clients: data || [] });
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await isAdminRequest())) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const payload = (await request.json()) as CreateClientPayload;
-  const email = payload.email?.trim() || '';
-  const password = payload.password?.trim() || '';
-  const clientName = payload.clientName?.trim() || '';
-  const projectStatus = payload.projectStatus?.trim() || null;
-  const links = payload.links || {};
-
-  if (!email || !password || !clientName) {
-    return NextResponse.json({ error: 'Email, password y client_name son obligatorios.' }, { status: 400 });
-  }
-
-  const missingCategory = LINK_CATEGORIES.find((category) => !(links[category] || '').trim());
-  if (missingCategory) {
-    return NextResponse.json({ error: `Falta el link para la categoría ${missingCategory}.` }, { status: 400 });
-  }
-
-  const supabaseAdmin = getSupabaseAdminClient();
-
-  const { data: authData, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: {
-      role: 'client'
+  try {
+    if (!(await isAdminRequest())) {
+      return jsonError('Unauthorized', 401);
     }
-  });
 
-  if (createAuthError || !authData.user) {
-    return NextResponse.json({ error: createAuthError?.message || 'No se pudo crear el usuario.' }, { status: 400 });
+    let payload: CreateClientPayload;
+    try {
+      payload = (await request.json()) as CreateClientPayload;
+    } catch {
+      return jsonError('JSON inválido en el body.', 400);
+    }
+
+    const email = payload.email?.trim() || '';
+    const password = payload.password?.trim() || '';
+    const clientName = payload.clientName?.trim() || '';
+    const projectStatus = payload.projectStatus?.trim() || null;
+    const links = payload.links || {};
+
+    if (!email || !password || !clientName) {
+      return jsonError('Email, password y client_name son obligatorios.', 400);
+    }
+
+    const supabaseAdmin = getSupabaseAdminClient();
+
+    const { data: authData, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        role: 'client'
+      }
+    });
+
+    if (createAuthError || !authData.user) {
+      return jsonError(createAuthError?.message || 'No se pudo crear el usuario.', 400);
+    }
+
+    const userId = authData.user.id;
+
+    const { error: roleInsertError } = await supabaseAdmin.from('user_roles').insert({
+      user_id: userId,
+      role: 'client'
+    });
+
+    if (roleInsertError) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return jsonError(roleInsertError.message, 400);
+    }
+
+    const { error: profileInsertError } = await supabaseAdmin.from('client_profiles').insert({
+      user_id: userId,
+      client_name: clientName,
+      project_status: projectStatus
+    });
+
+    if (profileInsertError) {
+      await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return jsonError(profileInsertError.message, 400);
+    }
+
+    const { data: profileRef, error: profileRefError } = await supabaseAdmin
+      .from('client_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle<ClientProfileRefRow>();
+
+    if (profileRefError || profileRef?.id === undefined || profileRef?.id === null) {
+      await supabaseAdmin.from('client_profiles').delete().eq('user_id', userId);
+      await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return jsonError(profileRefError?.message || 'No se pudo resolver el id interno del cliente.', 400);
+    }
+
+    const clientId = profileRef.id;
+
+    const linkRows = LINK_CATEGORIES.map((category) => ({
+      client_id: clientId,
+      link_type: category,
+      url: (links[category] || '').trim() || DEFAULT_LINK_URL
+    }));
+
+    const { error: linksInsertError } = await supabaseAdmin.from('client_links').insert(linkRows);
+    if (linksInsertError) {
+      await supabaseAdmin.from('client_profiles').delete().eq('user_id', userId);
+      await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return jsonError(linksInsertError.message, 400);
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        client: {
+          user_id: userId,
+          client_name: clientName,
+          project_status: projectStatus
+        }
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    return jsonError(getErrorMessage(error), 500);
   }
-
-  const userId = authData.user.id;
-
-  const { error: roleInsertError } = await supabaseAdmin.from('user_roles').insert({
-    user_id: userId,
-    role: 'client'
-  });
-
-  if (roleInsertError) {
-    await supabaseAdmin.auth.admin.deleteUser(userId);
-    return NextResponse.json({ error: roleInsertError.message }, { status: 400 });
-  }
-
-  const { error: profileInsertError } = await supabaseAdmin.from('client_profiles').insert({
-    user_id: userId,
-    client_name: clientName,
-    project_status: projectStatus
-  });
-
-  if (profileInsertError) {
-    await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
-    await supabaseAdmin.auth.admin.deleteUser(userId);
-    return NextResponse.json({ error: profileInsertError.message }, { status: 400 });
-  }
-
-  const linkRows = LINK_CATEGORIES.map((category) => ({
-    user_id: userId,
-    category,
-    url: links[category].trim()
-  }));
-
-  const { error: linksInsertError } = await supabaseAdmin.from('client_links').insert(linkRows);
-  if (linksInsertError) {
-    await supabaseAdmin.from('client_profiles').delete().eq('user_id', userId);
-    await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
-    await supabaseAdmin.auth.admin.deleteUser(userId);
-    return NextResponse.json({ error: linksInsertError.message }, { status: 400 });
-  }
-
-  return NextResponse.json({ ok: true }, { status: 201 });
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!(await isAdminRequest())) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    if (!(await isAdminRequest())) {
+      return jsonError('Unauthorized', 401);
+    }
+
+    let payload: { userId?: string };
+    try {
+      payload = (await request.json()) as { userId?: string };
+    } catch {
+      return jsonError('JSON inválido en el body.', 400);
+    }
+
+    const userId = payload.userId?.trim();
+    if (!userId) {
+      return jsonError('userId es obligatorio.', 400);
+    }
+
+    const supabaseAdmin = getSupabaseAdminClient();
+    const { data: profileRef, error: profileRefError } = await supabaseAdmin
+      .from('client_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle<ClientProfileRefRow>();
+
+    if (profileRefError || profileRef?.id === undefined || profileRef?.id === null) {
+      return jsonError(profileRefError?.message || 'No se pudo resolver el id interno del cliente.', 400);
+    }
+
+    const clientId = profileRef.id;
+
+    const { error: linksDeleteError } = await supabaseAdmin.from('client_links').delete().eq('client_id', clientId);
+    if (linksDeleteError) {
+      return jsonError(linksDeleteError.message, 400);
+    }
+
+    const { error: profileDeleteError } = await supabaseAdmin.from('client_profiles').delete().eq('user_id', userId);
+    if (profileDeleteError) {
+      return jsonError(profileDeleteError.message, 400);
+    }
+
+    const { error: roleDeleteError } = await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
+    if (roleDeleteError) {
+      return jsonError(roleDeleteError.message, 400);
+    }
+
+    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (authDeleteError) {
+      return jsonError(authDeleteError.message, 400);
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return jsonError(getErrorMessage(error), 500);
   }
-
-  const { userId } = (await request.json()) as { userId?: string };
-
-  if (!userId) {
-    return NextResponse.json({ error: 'userId es obligatorio.' }, { status: 400 });
-  }
-
-  const supabaseAdmin = getSupabaseAdminClient();
-
-  const { error: linksDeleteError } = await supabaseAdmin.from('client_links').delete().eq('user_id', userId);
-  if (linksDeleteError) {
-    return NextResponse.json({ error: linksDeleteError.message }, { status: 400 });
-  }
-
-  const { error: profileDeleteError } = await supabaseAdmin.from('client_profiles').delete().eq('user_id', userId);
-  if (profileDeleteError) {
-    return NextResponse.json({ error: profileDeleteError.message }, { status: 400 });
-  }
-
-  const { error: roleDeleteError } = await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
-  if (roleDeleteError) {
-    return NextResponse.json({ error: roleDeleteError.message }, { status: 400 });
-  }
-
-  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-  if (authDeleteError) {
-    return NextResponse.json({ error: authDeleteError.message }, { status: 400 });
-  }
-
-  return NextResponse.json({ ok: true });
 }

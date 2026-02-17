@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type ClientSummary = {
   user_id: string;
@@ -51,6 +52,7 @@ const LANDING_SLOTS = [
 type DashboardView = 'clients' | 'project' | 'reports' | 'cms';
 
 export function AdminDashboardPanel() {
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [view, setView] = useState<DashboardView>('clients');
 
   const [clients, setClients] = useState<ClientSummary[]>([]);
@@ -353,6 +355,11 @@ export function AdminDashboardPanel() {
     setLandingSaving(false);
   };
 
+  const onSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  };
+
   const renderClientManagement = () => (
     <section className="admin-main-card">
       <h2>Gestión de Clientes</h2>
@@ -582,8 +589,10 @@ export function AdminDashboardPanel() {
   return (
     <main className="dashboard-shell">
       <aside className="dashboard-sidebar">
-        <img src="/MaiaSedacaLogo.png" alt="Maia Sedaca" className="dashboard-logo" />
         <h1>Admin Panel</h1>
+        <button type="button" className="dashboard-logout-btn" onClick={onSignOut}>
+          Cerrar sesión
+        </button>
         <button type="button" className={`dashboard-nav-btn ${view === 'clients' ? 'active' : ''}`} onClick={() => setView('clients')}>
           Gestión de Clientes
         </button>
