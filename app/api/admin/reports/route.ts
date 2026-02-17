@@ -5,9 +5,16 @@ import { normalizeRole, resolveRoleFromMetadata } from '@/lib/auth/roles';
 
 type UserRoleRow = { role?: string | null };
 type ReportBatchPayload = {
+  reports?: WeeklyReportInsertPayload[];
   userId?: string;
   description?: string;
   imageUrls?: string[];
+};
+type WeeklyReportInsertPayload = {
+  client_id?: string;
+  photo_url?: string;
+  description?: string;
+  report_date?: string;
 };
 
 const PRIMARY_REPORTS_BUCKET = process.env.SUPABASE_REPORTS_BUCKET || process.env.SUPABASE_STORAGE_BUCKET || 'proyectos';
@@ -51,18 +58,28 @@ async function isAdminRequest() {
   return role === 'admin';
 }
 
-async function insertWeeklyReports(userId: string, description: string, imageUrls: string[]) {
-  const rows = imageUrls.map((photoUrl) => ({
-    user_id: userId,
-    description,
-    photo_url: photoUrl
-  }));
-
+async function insertWeeklyReports(rows: WeeklyReportInsertPayload[]) {
   const supabaseAdmin = getSupabaseAdminClient();
-  const { error } = await supabaseAdmin.from('weekly_reports').insert(rows);
+  for (const row of rows) {
+    const clientId = String(row.client_id || '').trim();
+    const photoUrl = String(row.photo_url || '').trim();
+    const description = String(row.description || '').trim();
+    const reportDate = String(row.report_date || '').trim();
 
-  if (error) {
-    return { ok: false as const, error: error.message };
+    if (!clientId || !photoUrl || !description || !reportDate) {
+      return { ok: false as const, error: 'Faltan datos para guardar el reporte semanal.' };
+    }
+
+    const { error } = await supabaseAdmin.from('weekly_reports').insert({
+      client_id: clientId,
+      photo_url: photoUrl,
+      description,
+      report_date: reportDate
+    });
+
+    if (error) {
+      return { ok: false as const, error: error.message };
+    }
   }
 
   return { ok: true as const, reportsCreated: rows.length };
@@ -77,15 +94,18 @@ export async function POST(request: NextRequest) {
     const contentType = request.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       const payload = (await request.json()) as ReportBatchPayload;
-      const userId = String(payload.userId || '').trim();
-      const description = String(payload.description || '').trim();
-      const imageUrls = (payload.imageUrls || []).map((url) => String(url || '').trim()).filter(Boolean);
+      const reports = (payload.reports || []).map((item) => ({
+        client_id: String(item.client_id || '').trim(),
+        photo_url: String(item.photo_url || '').trim(),
+        description: String(item.description || '').trim(),
+        report_date: String(item.report_date || '').trim()
+      }));
 
-      if (!userId || !description || imageUrls.length === 0) {
+      if (reports.length === 0) {
         return jsonError('Faltan datos para guardar el reporte semanal.', 400);
       }
 
-      const insertResult = await insertWeeklyReports(userId, description, imageUrls);
+      const insertResult = await insertWeeklyReports(reports);
       if (!insertResult.ok) {
         return jsonError(insertResult.error, 400);
       }
@@ -99,6 +119,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const userId = String(formData.get('userId') || '').trim();
     const description = String(formData.get('description') || '').trim();
+    const reportDate = String(formData.get('reportDate') || new Date().toISOString().slice(0, 10)).trim();
     const multiFiles = formData.getAll('files').filter((entry): entry is File => entry instanceof File);
     const legacyFile = formData.get('file');
     const files = multiFiles.length > 0 ? multiFiles : legacyFile instanceof File ? [legacyFile] : [];
@@ -114,6 +135,17 @@ export async function POST(request: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdminClient();
     const uploadedUrls: string[] = [];
+    const { data: profileRef, error: profileRefError } = await supabaseAdmin
+      .from('client_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle<{ id?: string | number | null }>();
+
+    if (profileRefError || profileRef?.id === undefined || profileRef?.id === null) {
+      return jsonError(profileRefError?.message || 'No se pudo resolver el client_id.', 400);
+    }
+
+    const clientId = String(profileRef.id);
 
     for (const [index, file] of files.entries()) {
       const extension = file.name.toLowerCase().split('.').pop() || 'jpg';
@@ -139,7 +171,14 @@ export async function POST(request: NextRequest) {
       uploadedUrls.push(publicUrlData.publicUrl);
     }
 
-    const insertResult = await insertWeeklyReports(userId, description, uploadedUrls);
+    const rows = uploadedUrls.map((photoUrl) => ({
+      client_id: clientId,
+      photo_url: photoUrl,
+      description,
+      report_date: reportDate
+    }));
+
+    const insertResult = await insertWeeklyReports(rows);
     if (!insertResult.ok) {
       return jsonError(insertResult.error, 400);
     }

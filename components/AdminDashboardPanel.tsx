@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type ClientSummary = {
+  id: string | number;
   user_id: string;
   client_name: string;
   project_status: string | null;
@@ -26,6 +27,12 @@ type ApiError = {
 };
 type ReportBatchPayload = ApiError & {
   reportsCreated?: number;
+};
+type WeeklyReportInsert = {
+  client_id: string;
+  photo_url: string;
+  description: string;
+  report_date: string;
 };
 
 const LINK_CATEGORIES = ['DOCUMENTACION', 'PLANOS', 'RENDERS', 'CONTRATOS', 'PAGOS'] as const;
@@ -104,7 +111,7 @@ export function AdminDashboardPanel() {
   const loadClients = async () => {
     setLoadingClients(true);
     const response = await fetch('/api/admin/clients');
-    const payload = (await response.json()) as { clients?: ClientSummary[] } & ApiError;
+    const payload = (await response.json()) as { clients?: Array<Partial<ClientSummary>> } & ApiError;
 
     if (!response.ok) {
       setGlobalError(payload.error || 'No se pudo cargar la lista de clientes.');
@@ -112,7 +119,16 @@ export function AdminDashboardPanel() {
       return;
     }
 
-    const list = payload.clients || [];
+    const list = (payload.clients || [])
+      .filter((client): client is Partial<ClientSummary> & { id: string | number; user_id: string; client_name: string } =>
+        client.id !== undefined && client.id !== null && Boolean(client.user_id) && Boolean(client.client_name)
+      )
+      .map((client) => ({
+        id: client.id,
+        user_id: String(client.user_id),
+        client_name: String(client.client_name),
+        project_status: client.project_status || null
+      }));
     setClients(list);
 
     if (!selectedClientId && list.length > 0) {
@@ -341,6 +357,14 @@ export function AdminDashboardPanel() {
     setReportUploadCurrent(0);
     setReportUploadTotal(reportFiles.length);
 
+    const selectedReportClient = clients.find((client) => client.user_id === selectedClientId) || null;
+    const reportClientId = selectedReportClient ? String(selectedReportClient.id) : '';
+    if (!reportClientId) {
+      setGlobalError('No se pudo resolver el client_id del cliente seleccionado.');
+      setReportUploading(false);
+      return;
+    }
+
     const uploadedUrls: string[] = [];
     for (const file of reportFiles) {
       const extension = file.name.toLowerCase().split('.').pop() || 'jpg';
@@ -365,9 +389,14 @@ export function AdminDashboardPanel() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId: selectedClientId,
-        description: reportDescription,
-        imageUrls: uploadedUrls
+        reports: uploadedUrls.map(
+          (photoUrl): WeeklyReportInsert => ({
+            client_id: reportClientId,
+            photo_url: photoUrl,
+            description: reportDescription,
+            report_date: new Date().toISOString().slice(0, 10)
+          })
+        )
       })
     });
 

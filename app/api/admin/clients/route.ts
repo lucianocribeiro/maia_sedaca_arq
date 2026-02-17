@@ -64,7 +64,7 @@ export async function GET() {
     const supabaseAdmin = getSupabaseAdminClient();
     const { data, error } = await supabaseAdmin
       .from('client_profiles')
-      .select('user_id, client_name, project_status')
+      .select('id, user_id, client_name, project_status')
       .order('client_name', { ascending: true });
 
     if (error) {

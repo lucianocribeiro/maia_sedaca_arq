@@ -24,6 +24,8 @@ type ClientLinkRow = {
 type WeeklyReportRow = {
   id?: string | number | null;
   created_at?: string | null;
+  report_date?: string | null;
+  client_id?: string | number | null;
   image_url?: string | null;
   photo_url?: string | null;
   url?: string | null;
@@ -88,7 +90,8 @@ export default async function ClientSlugPage({ params }: ClientPageProps) {
   const { data: reportRows } = await supabase
     .from('weekly_reports')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('client_id', profile.id)
+    .order('report_date', { ascending: false })
     .order('created_at', { ascending: false })
     .returns<WeeklyReportRow[]>();
 
@@ -103,7 +106,7 @@ export default async function ClientSlugPage({ params }: ClientPageProps) {
         id: String(row.id ?? `${row.created_at ?? 'report'}-${index}`),
         imageUrl,
         description: (row.description || row.summary || row.notes || '').trim(),
-        createdAt: row.created_at || null
+        createdAt: row.created_at || row.report_date || null
       };
     })
     .filter((report): report is NonNullable<typeof report> => Boolean(report));
