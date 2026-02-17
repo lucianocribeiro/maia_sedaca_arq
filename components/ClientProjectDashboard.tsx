@@ -123,15 +123,8 @@ export function ClientProjectDashboard({
               <p>Estamos preparando el registro fotografico de esta semana</p>
             </article>
           ) : (
-            <>
-              <article className="client-featured">
-                <img src={featured.imageUrl} alt="Avance destacado del proyecto" />
-                <div>
-                  <p>{featured.description || 'Sin descripción para este reporte.'}</p>
-                </div>
-              </article>
-
-              <div className="client-thumbs">
+            <div className="client-gallery-layout">
+              <div className="client-thumbs" aria-label="Galería de avances">
                 {reports.map((report) => (
                   <button
                     key={report.id}
@@ -144,7 +137,14 @@ export function ClientProjectDashboard({
                   </button>
                 ))}
               </div>
-            </>
+
+              <article className="client-featured">
+                <img src={featured.imageUrl} alt="Avance destacado del proyecto" />
+                <div>
+                  <p>{featured.description || 'Sin descripción para este reporte.'}</p>
+                </div>
+              </article>
+            </div>
           )}
         </section>
       </section>
