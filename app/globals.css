@@ -773,24 +773,20 @@ footer {
 }
 
 .client-gallery {
-  border-radius: 18px;
-  background: transparent;
-  padding: 0.2rem;
+  border-radius: 28px;
+  background: #f4f1eb;
+  padding: 2.5rem;
   display: grid;
-  gap: 1.1rem;
+  gap: 1.4rem;
 }
 
 .client-gallery h2 {
   margin: 0;
-  font-size: 1.32rem;
+  font-size: 1.2rem;
   font-weight: 600;
-}
-
-.client-gallery-layout {
-  display: grid;
-  grid-template-columns: minmax(260px, 34%) minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b6257;
 }
 
 .client-placeholder {
@@ -818,57 +814,120 @@ footer {
   font-weight: 400;
 }
 
-.client-featured {
+.client-report-card {
+  background: var(--blanco);
+  border-radius: 1.6rem;
+  box-shadow: 0 8px 22px -18px rgb(0 0 0 / 0.28);
+  padding: 2.5rem;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.8rem;
+  gap: 1.3rem;
+}
+
+.client-report-header {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.client-report-date {
+  margin: 0;
+  color: #a8a29e;
+  font-family: Quicksand, sans-serif;
+  font-size: 0.74rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.client-report-title {
+  margin: 0;
+  color: #78716c;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.client-featured {
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #ede8df;
-  background: var(--blanco);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 }
 
-.client-featured img {
+.client-featured-image {
   width: 100%;
-  height: 520px;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
+  animation: clientImageFade 0.28s ease;
 }
 
-.client-featured p {
+.client-report-description {
   margin: 0;
-  padding: 0 1rem 1rem;
-  line-height: 1.7;
-  font-weight: 400;
+  color: #57534e;
+  line-height: 1.85;
+  font-weight: 300;
+  font-size: 1.03rem;
 }
 
 .client-thumbs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.7rem;
-  align-content: start;
-  max-height: 520px;
-  overflow: auto;
-  padding-right: 0.2rem;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 0.65rem;
 }
 
 .client-thumb {
-  border: 1px solid var(--arena);
-  border-radius: 10px;
+  border: 0;
+  border-radius: 12px;
   overflow: hidden;
   padding: 0;
   background: transparent;
   cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.22s ease;
 }
 
+.client-thumb:hover,
 .client-thumb.active {
-  border-color: var(--negro);
+  opacity: 1;
 }
 
 .client-thumb img {
   width: 100%;
-  height: 120px;
+  aspect-ratio: 1 / 1;
   object-fit: cover;
+}
+
+.client-report-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.client-report-pill {
+  border: 0;
+  background: transparent;
+  color: #a8a29e;
+  font: inherit;
+  font-family: Quicksand, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.client-report-pill:hover,
+.client-report-pill.active {
+  color: #57534e;
+}
+
+@keyframes clientImageFade {
+  from {
+    opacity: 0.35;
+    transform: scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @media (max-width: 768px) {
@@ -942,18 +1001,15 @@ footer {
     grid-template-columns: 1fr 1fr;
   }
 
-  .client-featured img {
-    height: 300px;
+  .client-gallery {
+    padding: 1.35rem;
   }
 
-  .client-gallery-layout {
-    grid-template-columns: 1fr;
+  .client-report-card {
+    padding: 1.35rem;
   }
 
   .client-thumbs {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    max-height: none;
-    overflow: visible;
-    order: 2;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
