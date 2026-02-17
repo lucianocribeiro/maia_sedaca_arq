@@ -72,7 +72,8 @@ export function AdminDashboardPanel() {
 
   const [reportUploading, setReportUploading] = useState(false);
   const [reportDescription, setReportDescription] = useState('');
-  const [reportFile, setReportFile] = useState<File | null>(null);
+  const [reportFiles, setReportFiles] = useState<File[]>([]);
+  const [reportInputKey, setReportInputKey] = useState(0);
 
   const [landingLoading, setLandingLoading] = useState(true);
   const [landingSaving, setLandingSaving] = useState(false);
@@ -324,8 +325,8 @@ export function AdminDashboardPanel() {
       return;
     }
 
-    if (!reportFile) {
-      setGlobalError('Seleccioná una imagen JPG o PNG.');
+    if (reportFiles.length === 0) {
+      setGlobalError('Seleccioná al menos una imagen JPG, PNG o WEBP.');
       return;
     }
 
@@ -335,7 +336,9 @@ export function AdminDashboardPanel() {
     const body = new FormData();
     body.set('userId', selectedClientId);
     body.set('description', reportDescription);
-    body.set('file', reportFile);
+    reportFiles.forEach((file) => {
+      body.append('files', file);
+    });
 
     const response = await fetch('/api/admin/reports', {
       method: 'POST',
@@ -350,9 +353,10 @@ export function AdminDashboardPanel() {
       return;
     }
 
-    setGlobalMessage('Reporte semanal cargado correctamente.');
+    setGlobalMessage(`Reporte semanal cargado correctamente (${reportFiles.length} imagen${reportFiles.length === 1 ? '' : 'es'}).`);
     setReportDescription('');
-    setReportFile(null);
+    setReportFiles([]);
+    setReportInputKey((current) => current + 1);
     setReportUploading(false);
   };
 
@@ -550,10 +554,12 @@ export function AdminDashboardPanel() {
             required
           />
           <input
+            key={reportInputKey}
             className="admin-input"
             type="file"
-            accept="image/jpeg,image/png"
-            onChange={(event) => setReportFile(event.target.files?.[0] || null)}
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            onChange={(event) => setReportFiles(Array.from(event.target.files || []))}
             required
           />
           <button className="admin-submit-btn" type="submit" disabled={reportUploading}>

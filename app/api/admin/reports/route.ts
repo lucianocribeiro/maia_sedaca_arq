@@ -48,37 +48,46 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const userId = String(formData.get('userId') || '').trim();
     const description = String(formData.get('description') || '').trim();
-    const file = formData.get('file');
+    const multiFiles = formData.getAll('files').filter((entry): entry is File => entry instanceof File);
+    const legacyFile = formData.get('file');
+    const files = multiFiles.length > 0 ? multiFiles : legacyFile instanceof File ? [legacyFile] : [];
 
-    if (!userId || !description || !(file instanceof File)) {
+    if (!userId || !description || files.length === 0) {
       return jsonError('Faltan datos para cargar el reporte semanal.', 400);
     }
 
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowed.includes(file.type)) {
+    if (files.some((file) => !allowed.includes(file.type))) {
       return jsonError('Formato inválido. Solo JPG, PNG o WEBP.', 400);
     }
 
     const supabaseAdmin = getSupabaseAdminClient();
-    const extension = file.name.toLowerCase().split('.').pop() || 'jpg';
-    const filePath = `weekly-reports/${userId}/${Date.now()}.${extension}`;
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    const uploadedUrls: string[] = [];
 
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('proyectos')
-      .upload(filePath, fileBuffer, { contentType: file.type, upsert: false });
+    for (const [index, file] of files.entries()) {
+      const extension = file.name.toLowerCase().split('.').pop() || 'jpg';
+      const filePath = `weekly-reports/${userId}/${Date.now()}-${index}.${extension}`;
+      const fileBuffer = Buffer.from(await file.arrayBuffer());
 
-    if (uploadError) {
-      return jsonError(uploadError.message, 400);
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('proyectos')
+        .upload(filePath, fileBuffer, { contentType: file.type, upsert: false });
+
+      if (uploadError) {
+        return jsonError(uploadError.message, 400);
+      }
+
+      const { data: publicUrlData } = supabaseAdmin.storage.from('proyectos').getPublicUrl(filePath);
+      uploadedUrls.push(publicUrlData.publicUrl);
     }
 
-    const { data: publicUrlData } = supabaseAdmin.storage.from('proyectos').getPublicUrl(filePath);
-
-    const { error: reportError } = await supabaseAdmin.from('weekly_reports').insert({
+    const rows = uploadedUrls.map((photoUrl) => ({
       user_id: userId,
       description,
-      photo_url: publicUrlData.publicUrl
-    });
+      photo_url: photoUrl
+    }));
+
+    const { error: reportError } = await supabaseAdmin.from('weekly_reports').insert(rows);
 
     if (reportError) {
       return jsonError(reportError.message, 400);
@@ -86,11 +95,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      report: {
-        user_id: userId,
-        description,
-        photo_url: publicUrlData.publicUrl
-      }
+      reportsCreated: rows.length
     });
   } catch (error) {
     return jsonError(getErrorMessage(error), 500);
