@@ -852,9 +852,10 @@ footer {
 }
 
 .client-featured-image {
-  width: 100%;
+  width: 70%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
+  margin: 0 auto;
   animation: clientImageFade 0.28s ease;
 }
 
@@ -1011,5 +1012,9 @@ footer {
 
   .client-thumbs {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .client-featured-image {
+    width: 100%;
   }
 }
