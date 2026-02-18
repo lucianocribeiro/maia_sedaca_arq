@@ -87,13 +87,21 @@ export default async function ClientSlugPage({ params }: ClientPageProps) {
     url: linksByCategory.get(card.category) || null
   }));
 
-  const { data: reportRows } = await supabase
+  const clientId = String(profile.id);
+  const { data: reportRows, error: reportRowsError } = await supabase
     .from('weekly_reports')
     .select('*')
-    .eq('client_id', profile.id)
+    .eq('client_id', clientId)
     .order('report_date', { ascending: false })
     .order('created_at', { ascending: false })
     .returns<WeeklyReportRow[]>();
+
+  console.log('[ClientSlugPage] weekly_reports query', {
+    userId: user.id,
+    clientId,
+    rows: reportRows?.length || 0,
+    error: reportRowsError ? reportRowsError.message : null
+  });
 
   const reports = (reportRows || [])
     .map((row, index) => {
