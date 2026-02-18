@@ -34,9 +34,26 @@ type WeeklyReportInsert = {
   description: string;
   report_date: string;
 };
+type AdminWeeklyReportRow = {
+  id?: string | null;
+  client_id?: string | null;
+  photo_url?: string | null;
+  description?: string | null;
+  report_date?: string | null;
+  created_at?: string | null;
+};
+type AdminWeeklyStatusGroup = {
+  id: string;
+  clientId: string;
+  reportDate: string;
+  description: string;
+  photos: Array<{ id: string; photoUrl: string }>;
+};
 
 const LINK_CATEGORIES = ['DOCUMENTACION', 'PLANOS', 'RENDERS', 'CONTRATOS', 'PAGOS'] as const;
 const REPORTS_BUCKET = 'proyectos';
+const DELETE_CONFIRM_MESSAGE =
+  '¿Estás seguro de que deseas eliminar este contenido? Esta acción liberará espacio y no se puede deshacer';
 type LinkCategory = (typeof LINK_CATEGORIES)[number];
 type LinkMap = Record<LinkCategory, string>;
 
@@ -87,6 +104,9 @@ export function AdminDashboardPanel() {
   const [reportInputKey, setReportInputKey] = useState(0);
   const [reportUploadCurrent, setReportUploadCurrent] = useState(0);
   const [reportUploadTotal, setReportUploadTotal] = useState(0);
+  const [reportRows, setReportRows] = useState<AdminWeeklyReportRow[]>([]);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportMutatingId, setReportMutatingId] = useState<string | null>(null);
 
   const [landingLoading, setLandingLoading] = useState(true);
   const [landingSaving, setLandingSaving] = useState(false);
@@ -106,6 +126,24 @@ export function AdminDashboardPanel() {
   const clearAlerts = () => {
     setGlobalMessage(null);
     setGlobalError(null);
+  };
+
+  const formatReportDate = (dateKey: string) => {
+    const normalized = dateKey.trim();
+    if (!normalized) {
+      return 'Fecha no disponible';
+    }
+
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      return normalized;
+    }
+
+    return new Intl.DateTimeFormat('es-AR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    }).format(parsed);
   };
 
   const loadClients = async () => {
@@ -190,6 +228,33 @@ export function AdminDashboardPanel() {
     setLandingLoading(false);
   };
 
+  const loadSelectedClientReports = async (userId: string) => {
+    if (!userId) {
+      setReportRows([]);
+      return;
+    }
+
+    const selectedReportClient = clients.find((client) => client.user_id === userId) || null;
+    const reportClientId = selectedReportClient ? String(selectedReportClient.id) : '';
+    if (!reportClientId) {
+      setReportRows([]);
+      return;
+    }
+
+    setReportLoading(true);
+    const response = await fetch(`/api/admin/reports?clientId=${encodeURIComponent(reportClientId)}`);
+    const payload = (await response.json()) as { reports?: AdminWeeklyReportRow[] } & ApiError;
+
+    if (!response.ok) {
+      setGlobalError(payload.error || 'No se pudo cargar la bitácora semanal.');
+      setReportLoading(false);
+      return;
+    }
+
+    setReportRows(payload.reports || []);
+    setReportLoading(false);
+  };
+
   useEffect(() => {
     void loadClients();
     void loadLandingSections();
@@ -202,6 +267,37 @@ export function AdminDashboardPanel() {
 
     void loadSelectedClientProject(selectedClientId);
   }, [selectedClientId]);
+
+  useEffect(() => {
+    if (!selectedClientId) {
+      setReportRows([]);
+      return;
+    }
+
+    const selectedReportClient = clients.find((client) => client.user_id === selectedClientId) || null;
+    const reportClientId = selectedReportClient ? String(selectedReportClient.id) : '';
+    if (!reportClientId) {
+      setReportRows([]);
+      return;
+    }
+
+    const loadReports = async () => {
+      setReportLoading(true);
+      const response = await fetch(`/api/admin/reports?clientId=${encodeURIComponent(reportClientId)}`);
+      const payload = (await response.json()) as { reports?: AdminWeeklyReportRow[] } & ApiError;
+
+      if (!response.ok) {
+        setGlobalError(payload.error || 'No se pudo cargar la bitácora semanal.');
+        setReportLoading(false);
+        return;
+      }
+
+      setReportRows(payload.reports || []);
+      setReportLoading(false);
+    };
+
+    void loadReports();
+  }, [selectedClientId, clients]);
 
   useEffect(() => {
     const maxForSection = (sectionKey: 'obras' | 'detalles') =>
@@ -241,6 +337,40 @@ export function AdminDashboardPanel() {
 
     return slots;
   }, [obrasSlots, detallesSlots]);
+
+  const groupedWeeklyStatuses = useMemo<AdminWeeklyStatusGroup[]>(() => {
+    const grouped = new Map<string, AdminWeeklyStatusGroup>();
+
+    reportRows.forEach((row) => {
+      const reportId = String(row.id || '').trim();
+      const clientId = String(row.client_id || '').trim();
+      const reportDate = String(row.report_date || '').trim();
+      const description = String(row.description || '').trim();
+      const photoUrl = String(row.photo_url || '').trim();
+
+      if (!reportId || !clientId || !photoUrl) {
+        return;
+      }
+
+      const statusKey = `${clientId}::${reportDate || 'sin-fecha'}::${description || 'sin-descripcion'}`;
+      if (!grouped.has(statusKey)) {
+        grouped.set(statusKey, {
+          id: statusKey,
+          clientId,
+          reportDate,
+          description,
+          photos: []
+        });
+      }
+
+      grouped.get(statusKey)?.photos.push({
+        id: reportId,
+        photoUrl
+      });
+    });
+
+    return Array.from(grouped.values());
+  }, [reportRows]);
 
   const onCreateClient = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -284,7 +414,7 @@ export function AdminDashboardPanel() {
   };
 
   const onDeleteClient = async (userId: string, clientName: string) => {
-    const confirmDelete = window.confirm(`Se eliminará ${clientName} y todo su acceso. ¿Continuar?`);
+    const confirmDelete = window.confirm(DELETE_CONFIRM_MESSAGE);
     if (!confirmDelete) {
       return;
     }
@@ -416,6 +546,144 @@ export function AdminDashboardPanel() {
     setReportUploading(false);
     setReportUploadCurrent(0);
     setReportUploadTotal(0);
+    await loadSelectedClientReports(selectedClientId);
+  };
+
+  const onSaveWeeklyStatus = async (event: FormEvent<HTMLFormElement>, group: AdminWeeklyStatusGroup) => {
+    event.preventDefault();
+    clearAlerts();
+
+    const formData = new FormData(event.currentTarget);
+    const nextDescription = String(formData.get('description') || '').trim();
+    const nextReportDate = String(formData.get('reportDate') || '').trim();
+    if (!nextDescription || !nextReportDate) {
+      setGlobalError('Completá fecha y descripción para guardar cambios.');
+      return;
+    }
+
+    setReportMutatingId(`status:${group.id}`);
+    const response = await fetch('/api/admin/reports', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update_weekly_status',
+        clientId: group.clientId,
+        fromDescription: group.description,
+        fromReportDate: group.reportDate,
+        nextDescription,
+        nextReportDate
+      })
+    });
+    const payload = (await response.json()) as ApiError;
+
+    if (!response.ok) {
+      setGlobalError(payload.error || 'No se pudo editar el estado semanal.');
+      setReportMutatingId(null);
+      return;
+    }
+
+    setGlobalMessage('Estado semanal actualizado.');
+    await loadSelectedClientReports(selectedClientId);
+    setReportMutatingId(null);
+  };
+
+  const onDeleteWeeklyStatus = async (group: AdminWeeklyStatusGroup) => {
+    const confirmDelete = window.confirm(DELETE_CONFIRM_MESSAGE);
+    if (!confirmDelete) {
+      return;
+    }
+
+    clearAlerts();
+    setReportMutatingId(`status:${group.id}`);
+    const response = await fetch('/api/admin/reports', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'delete_weekly_status',
+        clientId: group.clientId,
+        reportDate: group.reportDate,
+        description: group.description
+      })
+    });
+    const payload = (await response.json()) as ApiError;
+
+    if (!response.ok) {
+      setGlobalError(payload.error || 'No se pudo eliminar el estado semanal.');
+      setReportMutatingId(null);
+      return;
+    }
+
+    setGlobalMessage('Estado semanal eliminado.');
+    await loadSelectedClientReports(selectedClientId);
+    setReportMutatingId(null);
+  };
+
+  const onDeleteWeeklyPhoto = async (reportId: string) => {
+    const confirmDelete = window.confirm(DELETE_CONFIRM_MESSAGE);
+    if (!confirmDelete) {
+      return;
+    }
+
+    clearAlerts();
+    setReportMutatingId(`photo:${reportId}`);
+    const response = await fetch('/api/admin/reports', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'delete_report_photo',
+        reportId
+      })
+    });
+    const payload = (await response.json()) as ApiError;
+
+    if (!response.ok) {
+      setGlobalError(payload.error || 'No se pudo eliminar la foto.');
+      setReportMutatingId(null);
+      return;
+    }
+
+    setGlobalMessage('Foto eliminada.');
+    await loadSelectedClientReports(selectedClientId);
+    setReportMutatingId(null);
+  };
+
+  const onReplaceWeeklyPhoto = async (event: FormEvent<HTMLFormElement>, reportId: string) => {
+    event.preventDefault();
+    clearAlerts();
+
+    const formData = new FormData(event.currentTarget);
+    const replacementFile = formData.get('replacementPhoto');
+    if (!(replacementFile instanceof File)) {
+      setGlobalError('Seleccioná una imagen para reemplazar la foto.');
+      return;
+    }
+    if (!selectedClientId) {
+      setGlobalError('Seleccioná un cliente.');
+      return;
+    }
+
+    const body = new FormData();
+    body.set('action', 'replace_report_photo');
+    body.set('reportId', reportId);
+    body.set('userId', selectedClientId);
+    body.set('file', replacementFile);
+
+    setReportMutatingId(`photo:${reportId}`);
+    const response = await fetch('/api/admin/reports', {
+      method: 'PATCH',
+      body
+    });
+    const payload = (await response.json()) as ApiError;
+
+    if (!response.ok) {
+      setGlobalError(payload.error || 'No se pudo reemplazar la foto.');
+      setReportMutatingId(null);
+      return;
+    }
+
+    setGlobalMessage('Foto actualizada.');
+    await loadSelectedClientReports(selectedClientId);
+    setReportMutatingId(null);
   };
 
   const onUploadLandingImage = async (event: FormEvent<HTMLFormElement>) => {
@@ -592,44 +860,121 @@ export function AdminDashboardPanel() {
 
   const renderReports = () => (
     <section className="admin-main-card">
-      <h2>Galería y Bitácora (Upload)</h2>
-      <article className="admin-card">
-        <form className="admin-form" onSubmit={onUploadReport}>
-          <select className="admin-input" value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)}>
-            <option value="">Seleccionar cliente</option>
-            {clients.map((client) => (
-              <option key={client.user_id} value={client.user_id}>
-                {client.client_name}
-              </option>
-            ))}
-          </select>
-          <textarea
-            className="admin-input"
-            placeholder="Descripción del avance semanal"
-            value={reportDescription}
-            onChange={(event) => setReportDescription(event.target.value)}
-            rows={4}
-            required
-          />
-          <input
-            key={reportInputKey}
-            className="admin-input"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            onChange={(event) => setReportFiles(Array.from(event.target.files || []))}
-            required
-          />
-          <button className="admin-submit-btn" type="submit" disabled={reportUploading}>
-            {reportUploading ? 'Subiendo...' : 'Subir Reporte'}
-          </button>
-          {reportUploading && reportUploadTotal > 0 ? (
-            <p>
-              Progreso: {reportUploadCurrent}/{reportUploadTotal} imágenes
-            </p>
+      <h2>Galería y Bitácora (Upload + Editar)</h2>
+      <div className="admin-main-grid">
+        <article className="admin-card">
+          <form className="admin-form" onSubmit={onUploadReport}>
+            <select className="admin-input" value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)}>
+              <option value="">Seleccionar cliente</option>
+              {clients.map((client) => (
+                <option key={client.user_id} value={client.user_id}>
+                  {client.client_name}
+                </option>
+              ))}
+            </select>
+            <textarea
+              className="admin-input"
+              placeholder="Descripción del avance semanal"
+              value={reportDescription}
+              onChange={(event) => setReportDescription(event.target.value)}
+              rows={4}
+              required
+            />
+            <input
+              key={reportInputKey}
+              className="admin-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              onChange={(event) => setReportFiles(Array.from(event.target.files || []))}
+              required
+            />
+            <button className="admin-submit-btn" type="submit" disabled={reportUploading}>
+              {reportUploading ? 'Subiendo...' : 'Subir Reporte'}
+            </button>
+            {reportUploading && reportUploadTotal > 0 ? (
+              <p>
+                Progreso: {reportUploadCurrent}/{reportUploadTotal} imágenes
+              </p>
+            ) : null}
+          </form>
+        </article>
+
+        <article className="admin-card">
+          <h3>Estados semanales actuales</h3>
+          {reportLoading ? <p>Cargando estados semanales...</p> : null}
+          {!reportLoading && !selectedClientId ? <p>Seleccioná un cliente para ver su bitácora.</p> : null}
+          {!reportLoading && selectedClientId && groupedWeeklyStatuses.length === 0 ? <p>No hay estados semanales cargados.</p> : null}
+          {!reportLoading && groupedWeeklyStatuses.length > 0 ? (
+            <div className="admin-reports-list">
+              {groupedWeeklyStatuses.map((group) => (
+                <article key={group.id} className="admin-report-item">
+                  <form className="admin-form" onSubmit={(event) => onSaveWeeklyStatus(event, group)}>
+                    <div className="admin-report-row">
+                      <label>Fecha</label>
+                      <input className="admin-input" name="reportDate" type="date" defaultValue={group.reportDate} required />
+                    </div>
+                    <textarea
+                      className="admin-input"
+                      name="description"
+                      defaultValue={group.description}
+                      rows={3}
+                      placeholder="Descripción semanal"
+                      required
+                    />
+                    <p className="admin-report-meta">
+                      {formatReportDate(group.reportDate)} · {group.photos.length} foto{group.photos.length === 1 ? '' : 's'}
+                    </p>
+                    <div className="admin-report-actions">
+                      <button type="submit" className="admin-submit-btn" disabled={reportMutatingId === `status:${group.id}`}>
+                        {reportMutatingId === `status:${group.id}` ? 'Guardando...' : 'Guardar estado'}
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-delete-btn"
+                        onClick={() => onDeleteWeeklyStatus(group)}
+                        disabled={reportMutatingId === `status:${group.id}`}
+                      >
+                        Eliminar estado
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="admin-report-photo-grid">
+                    {group.photos.map((photo) => (
+                      <div key={photo.id} className="admin-report-photo-card">
+                        <img src={photo.photoUrl} alt="Foto del reporte semanal" />
+                        <form className="admin-form" onSubmit={(event) => onReplaceWeeklyPhoto(event, photo.id)}>
+                          <input
+                            className="admin-input"
+                            type="file"
+                            name="replacementPhoto"
+                            accept="image/jpeg,image/png,image/webp"
+                            required
+                          />
+                          <div className="admin-report-actions">
+                            <button type="submit" className="admin-submit-btn" disabled={reportMutatingId === `photo:${photo.id}`}>
+                              {reportMutatingId === `photo:${photo.id}` ? 'Actualizando...' : 'Cambiar foto'}
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-delete-btn"
+                              onClick={() => onDeleteWeeklyPhoto(photo.id)}
+                              disabled={reportMutatingId === `photo:${photo.id}`}
+                            >
+                              Eliminar foto
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
           ) : null}
-        </form>
-      </article>
+        </article>
+      </div>
     </section>
   );
 

@@ -9,6 +9,9 @@ type UserRoleRow = {
 type ClientProfileRefRow = {
   id?: string | number | null;
 };
+type WeeklyReportPhotoRow = {
+  photo_url?: string | null;
+};
 
 type CreateClientPayload = {
   email?: string;
@@ -20,6 +23,7 @@ type CreateClientPayload = {
 
 const LINK_CATEGORIES = ['DOCUMENTACION', 'PLANOS', 'RENDERS', 'CONTRATOS', 'PAGOS'] as const;
 const DEFAULT_LINK_URL = 'https://drive.google.com/';
+const REPORTS_BUCKET = 'proyectos';
 
 export const runtime = 'nodejs';
 
@@ -29,6 +33,26 @@ function jsonError(error: string, status = 400) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Internal server error';
+}
+
+function extractProyectosPathFromPublicUrl(url: string) {
+  const normalizedUrl = url.trim();
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(normalizedUrl);
+    const marker = `/storage/v1/object/public/${REPORTS_BUCKET}/`;
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex < 0) {
+      return null;
+    }
+
+    return decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+  } catch {
+    return null;
+  }
 }
 
 async function isAdminRequest() {
@@ -213,21 +237,34 @@ export async function DELETE(request: NextRequest) {
       return jsonError(profileRefError?.message || 'No se pudo resolver el id interno del cliente.', 400);
     }
 
-    const clientId = profileRef.id;
+    const clientId = String(profileRef.id);
+    const { data: reportRows, error: reportRowsError } = await supabaseAdmin
+      .from('weekly_reports')
+      .select('photo_url')
+      .eq('client_id', clientId)
+      .returns<WeeklyReportPhotoRow[]>();
 
-    const { error: linksDeleteError } = await supabaseAdmin.from('client_links').delete().eq('client_id', clientId);
-    if (linksDeleteError) {
-      return jsonError(linksDeleteError.message, 400);
+    if (reportRowsError) {
+      return jsonError(reportRowsError.message, 400);
     }
 
-    const { error: profileDeleteError } = await supabaseAdmin.from('client_profiles').delete().eq('user_id', userId);
-    if (profileDeleteError) {
-      return jsonError(profileDeleteError.message, 400);
-    }
+    const filePaths = Array.from(
+      new Set(
+        (reportRows || [])
+          .map((row) => extractProyectosPathFromPublicUrl(String(row.photo_url || '')))
+          .filter((path): path is string => Boolean(path))
+      )
+    );
 
-    const { error: roleDeleteError } = await supabaseAdmin.from('user_roles').delete().eq('user_id', userId);
-    if (roleDeleteError) {
-      return jsonError(roleDeleteError.message, 400);
+    if (filePaths.length > 0) {
+      const CHUNK_SIZE = 100;
+      for (let index = 0; index < filePaths.length; index += CHUNK_SIZE) {
+        const chunk = filePaths.slice(index, index + CHUNK_SIZE);
+        const { error: removeError } = await supabaseAdmin.storage.from(REPORTS_BUCKET).remove(chunk);
+        if (removeError) {
+          return jsonError(removeError.message, 400);
+        }
+      }
     }
 
     const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);

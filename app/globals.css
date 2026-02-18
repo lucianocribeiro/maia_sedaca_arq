@@ -650,6 +650,67 @@ footer {
   border-radius: 8px;
 }
 
+.admin-reports-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.admin-report-item {
+  border: 1px solid var(--arena);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.admin-report-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-report-row label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.admin-report-meta {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.admin-report-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-report-actions .admin-submit-btn,
+.admin-report-actions .admin-delete-btn {
+  margin-top: 0;
+}
+
+.admin-report-photo-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.admin-report-photo-card {
+  border: 1px solid var(--arena);
+  border-radius: 10px;
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.admin-report-photo-card img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
 .client-shell {
   min-height: 100vh;
   background: #f4f1eb;
