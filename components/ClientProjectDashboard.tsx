@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type ResourceCard = {
@@ -68,7 +68,6 @@ export function ClientProjectDashboard({
   reports
 }: ClientProjectDashboardProps) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
-  const [reportsLoading, setReportsLoading] = useState(true);
   const groupedReports = useMemo<WeeklyReportGroup[]>(() => {
     const groups = new Map<string, WeeklyReportGroup>();
 
@@ -95,9 +94,32 @@ export function ClientProjectDashboard({
     return Array.from(groups.values());
   }, [reports]);
 
-  useEffect(() => {
-    setReportsLoading(false);
-  }, [reports]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(groupedReports[0]?.id ?? null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(groupedReports[0]?.photos[0]?.id ?? null);
+
+  const selectedGroup = useMemo(() => {
+    if (!groupedReports.length) {
+      return null;
+    }
+
+    if (!selectedGroupId) {
+      return groupedReports[0];
+    }
+
+    return groupedReports.find((report) => report.id === selectedGroupId) ?? groupedReports[0];
+  }, [groupedReports, selectedGroupId]);
+
+  const featuredPhoto = useMemo(() => {
+    if (!selectedGroup || selectedGroup.photos.length === 0) {
+      return null;
+    }
+
+    if (!selectedPhotoId) {
+      return selectedGroup.photos[0];
+    }
+
+    return selectedGroup.photos.find((photo) => photo.id === selectedPhotoId) ?? selectedGroup.photos[0];
+  }, [selectedGroup, selectedPhotoId]);
 
   const formatReportDate = (dateKey: string) => {
     if (!dateKey || dateKey === 'sin-fecha') {
@@ -160,11 +182,7 @@ export function ClientProjectDashboard({
         <section className="client-gallery">
           <h2>Bitácora de avance</h2>
 
-          {reportsLoading ? (
-            <article className="client-placeholder">
-              <p>Cargando bitácora...</p>
-            </article>
-          ) : groupedReports.length === 0 ? (
+          {!selectedGroup || !featuredPhoto ? (
             <article className="client-placeholder">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M4 7h16v10H4z" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -173,33 +191,55 @@ export function ClientProjectDashboard({
               <p>Estamos preparando el registro fotografico de esta semana</p>
             </article>
           ) : (
-            <div className="space-y-6">
-              {groupedReports.map((group) => (
-                <article key={group.id} className="bg-white rounded-3xl p-10 shadow-sm border border-stone-100">
-                  <header className="mb-8">
-                    <span className="text-[10px] tracking-[0.3em] text-stone-400 uppercase font-semibold">
-                      {formatReportDate(group.dateKey)}
-                    </span>
-                    <h2 className="text-xl text-stone-800 font-medium mt-2">Avance Semanal</h2>
-                  </header>
+            <article className="client-report-card">
+              <header className="client-report-header">
+                <p className="client-report-date">{formatReportDate(selectedGroup.dateKey)}</p>
+                <p className="client-report-title">Reporte Semanal de Avance</p>
+              </header>
 
-                  <div className="space-y-6">
-                    {group.photos.map((photo) => (
-                      <img
-                        key={photo.id}
-                        src={photo.imageUrl}
-                        className="w-full aspect-video object-cover rounded-2xl"
-                        alt="Avance semanal del proyecto"
-                      />
-                    ))}
-                    <p className="text-stone-600 font-light leading-relaxed text-lg">
-                      {group.description || 'Sin descripción para este reporte.'}
-                    </p>
-                  </div>
-                </article>
+              <div className="client-featured">
+                <img key={featuredPhoto.id} src={featuredPhoto.imageUrl} alt="Avance destacado del proyecto" className="client-featured-image" />
+              </div>
+
+              <p className="client-report-description">
+                {selectedGroup.description || 'Sin descripción para este reporte.'}
+              </p>
+
+              {selectedGroup.photos.length > 1 ? (
+                <div className="client-thumbs" aria-label="Galería de avances">
+                  {selectedGroup.photos.map((photo) => (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      className={`client-thumb ${featuredPhoto.id === photo.id ? 'active' : ''}`}
+                      onClick={() => setSelectedPhotoId(photo.id)}
+                      aria-label="Ver imagen de avance"
+                    >
+                      <img src={photo.imageUrl} alt="Miniatura de avance semanal" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </article>
+          )}
+
+          {groupedReports.length > 1 ? (
+            <div className="client-report-nav" aria-label="Seleccionar reporte semanal">
+              {groupedReports.map((group) => (
+                <button
+                  key={group.id}
+                  type="button"
+                  className={`client-report-pill ${selectedGroup?.id === group.id ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedGroupId(group.id);
+                    setSelectedPhotoId(group.photos[0]?.id || null);
+                  }}
+                >
+                  {formatReportDate(group.dateKey)}
+                </button>
               ))}
             </div>
-          )}
+          ) : null}
         </section>
       </section>
     </main>
